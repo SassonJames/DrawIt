@@ -56,7 +56,7 @@ io.on('connection', (socket) => {
   });
 
   // When they update their square's position, redraw it
-  socket.on('newcircle', (data) => {
+  socket.on('newpoint', (data) => {
     drawstack.push(data);
     io.sockets.in('room1').emit('updateDraw', data);
   });
@@ -89,8 +89,7 @@ io.on('connection', (socket) => {
       currentDrawer = message.name;
       drawstack = [];
       io.sockets.in('room1').emit('changeTurn', message);
-    } 
-    else {
+    } else {
       const message = `Time Left: ${currentTime}`;
       io.sockets.in('room1').emit('tickTimer', message);
     }

@@ -28,33 +28,38 @@
         */
         let gameState;
 
-        let circle = {
-            updateTime: new Date().getTime(),
+        let point = {
             x: 0,
             y: 0,
-            rad: 5,
+            lift: false,
             color: '#000000'
         };
 
-        const makeCircle = () => {
-            circle.x = mouseX - circle.rad;
-            circle.y = mouseY - circle.rad;
-            circle.color = randColor;
-            socket.emit('newcircle', circle);
+        const makePoint = (isRelease) => {
+            point.x = mouseX;
+            point.y = mouseY;
+            point.lift = isRelease,
+            point.color = randColor;
+            socket.emit('newpoint', point);
         };
         
         const draw = () => {
             ctx.clearRect(0,0, canvas.width, canvas.height);
             let keys = Object.keys(drawStack);
-            for(let i=0; i < keys.length; i++){
+            ctx.beginPath();
+            ctx.lineWidth = 4;
+            ctx.moveTo(drawStack[0].x, drawStack[0].y);
+            for(let i=1; i < keys.length; i++){
                 const drawCall = drawStack[keys[i]];
-                ctx.fillStyle = drawCall.color;
                 ctx.strokeStyle = drawCall.color;
-                ctx.beginPath();
-                ctx.arc(drawCall.x, drawCall.y, drawCall.rad, 0, 2*Math.PI);
-                ctx.fill();
-                ctx.stroke();
+                if(drawStack[keys[i-1]].lift == true){
+                    ctx.moveTo(drawCall.x, drawCall.y);
+                }
+                else{
+                    ctx.lineTo(drawCall.x, drawCall.y);
+                }
             }
+            ctx.stroke();
         };
         
         const updateDrawstack = (data) => {
@@ -64,7 +69,7 @@
 
         const checkMouse = () => {
             if(mouseDown && gameState == 2){
-                makeCircle();
+                makePoint(false);
             };
         };
 
@@ -109,7 +114,7 @@
                 randColor += letters[Math.floor(Math.random() * 16)];
             }
             
-            circle.color = randColor;
+            point.color = randColor;
             
             canvas.addEventListener("mousedown", function(evt){
                 mouseDown = true;
@@ -117,6 +122,7 @@
             
             canvas.addEventListener("mouseup", function(evt){
                 mouseDown = false;
+                makePoint(true);
             });
             
             canvas.addEventListener("mousemove", function(evt){
