@@ -43,8 +43,8 @@ io.on('connection', (socket) => {
     socket.emit('catchUp', drawstack);
     userNames.push(data.name);
 
-    if (userNames.length >= 2) {
-      currentTime = 30;
+    if (userNames.length === 2) {
+      currentTime = 60;
       const message = {};
       message.draw = pictures[Math.floor(Math.random() * pictures.length)];
       currentWord = message.draw;
@@ -74,7 +74,7 @@ io.on('connection', (socket) => {
   socket.on('ticktimer', () => {
     currentTime -= 1;
     if (currentTime <= 0) {
-      currentTime = 30;
+      currentTime = 60;
       const message = {};
 
       message.draw = pictures[Math.floor(Math.random() * 6)];
@@ -89,6 +89,7 @@ io.on('connection', (socket) => {
       drawstack = [];
       io.sockets.in('room1').emit('changeTurn', message);
     } else {
+      io.sockets.in('room1').emit('msg', { msg: `The word was ${currentWord}`, name: 'Server' });
       const message = `Time Left: ${currentTime}`;
       io.sockets.in('room1').emit('tickTimer', message);
     }
