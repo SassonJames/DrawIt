@@ -179,7 +179,7 @@
                 }
             });
             
-            setInterval(checkMouse, 0.001);
+            setInterval(checkMouse, 1);
             setInterval(function(){
                 if(gameState == 2){
                     socket.emit('ticktimer');

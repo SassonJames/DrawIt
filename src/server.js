@@ -74,6 +74,7 @@ io.on('connection', (socket) => {
   socket.on('ticktimer', () => {
     currentTime -= 1;
     if (currentTime <= 0) {
+      io.sockets.in('room1').emit('msg', { msg: `The word was ${currentWord}`, name: 'Server' });
       currentTime = 60;
       const message = {};
 
@@ -88,8 +89,8 @@ io.on('connection', (socket) => {
       currentDrawer = message.name;
       drawstack = [];
       io.sockets.in('room1').emit('changeTurn', message);
-    } else {
-      io.sockets.in('room1').emit('msg', { msg: `The word was ${currentWord}`, name: 'Server' });
+    } 
+    else {
       const message = `Time Left: ${currentTime}`;
       io.sockets.in('room1').emit('tickTimer', message);
     }
