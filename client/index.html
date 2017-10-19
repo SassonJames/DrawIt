@@ -6,17 +6,19 @@
     <script type="text/babel" >
         "use strict";
         
+        // Canvas and Context variables
         let canvas;
         let ctx;
-        let socket;
-        let randColor;
-        let mouseDown;
-        let mouseX;
-        let mouseY;
-        let username;
-        let score;
-        let myWords = [];
-        let drawStack = [];
+
+        let socket;         // Variable to store socket and socket responses
+        let randColor;      // Randomly generated color 
+        let mouseDown;      // Boolean to keep track if mouse is held down
+        let mouseX;         // Keeps track of Mouse X position
+        let mouseY;         // Keeps track of Mouse Y position
+        let username;       // Username of the player
+        let score;          // Player score
+        let myWords = [];   // Words player submitted
+        let drawStack = []; // Current drawstack, only drawn when new update comes in
 
         /*
         * 0 = Game Not Started/Picking Username
@@ -28,6 +30,9 @@
         */
         let gameState;
 
+        // Point object, keeps track of the x and y positions for the lines that are drawn
+        // Lift variable is used to keep track of when the player released the mouse
+        // This allows players to stop and restart drawing a new line
         let point = {
             x: 0,
             y: 0,
@@ -35,6 +40,8 @@
             color: '#000000'
         };
 
+        // Updates the point information and sends it to the server
+        // Is Release tracks if the point was a 'release' point, or the end of a line
         const makePoint = (isRelease) => {
             point.x = mouseX;
             point.y = mouseY;
@@ -43,6 +50,9 @@
             socket.emit('newpoint', point);
         };
         
+        // Loops trhough the drawstack, connecting the lines
+        // If there is a 'released' point, will instead moveTo
+        // the next location rather than draw to it
         const draw = () => {
             ctx.clearRect(0,0, canvas.width, canvas.height);
             let keys = Object.keys(drawStack);
@@ -62,17 +72,23 @@
             ctx.stroke();
         };
         
+        // Pushes new data from the server to the drawstack
+        // Then redraws the stack
         const updateDrawstack = (data) => {
               drawStack.push(data);
               draw();
         };
 
+        // If the mouse is still down
+        // create a new point that is not a release point
         const checkMouse = () => {
             if(mouseDown && gameState == 2){
                 makePoint(false);
             };
         };
 
+        // Send a message over the server to the chat
+        // These come in various forms
         const sendMessage = (e) => {
             const message = document.querySelector("#message");
             const chat = document.querySelector("#chat");
@@ -81,6 +97,12 @@
             if(!chatMessage){
               chatMessage = '...';
             }
+            
+            /*
+            * GameState 0: Chat message is turned into username for player
+            * GameState 1: Guess the word with your chat message
+            * GameState 4: Submitting words to the server
+            */
             switch(gameState){
                 case 0:
                     username = chatMessage;
@@ -101,6 +123,8 @@
             }
         }
         
+        // Initialize all variables and connect to socket
+        // Set up socket events
         const init = () => {
             canvas = document.querySelector("#canvas");
             ctx = canvas.getContext("2d");
@@ -108,6 +132,9 @@
             mouseDown = false;
             gameState = 0;
             score = 0;
+            
+            // This set of 3 lines creates a random
+            // hex color to be used in the drawing process
             var letters = '0123456789ABCDEF';
             var color = '#';
             for(var i = 0; i < 6; i++){
@@ -116,25 +143,36 @@
             
             point.color = randColor;
             
+            // If the mouse is down, change the variable to true
             canvas.addEventListener("mousedown", function(evt){
                 mouseDown = true;
             });
             
+            // If the mouse is released, change the variable 
+            // Then create a release point
             canvas.addEventListener("mouseup", function(evt){
                 mouseDown = false;
                 makePoint(true);
             });
             
+            // When the mouse moves, track the X and Y locations
             canvas.addEventListener("mousemove", function(evt){
                 mouseX = evt.clientX;
                 mouseY = evt.clientY;
             });
             
+            // When the send button is clicked
+            // Send the message to the server
             const sendMsg = document.querySelector("#send");
             sendMsg.addEventListener('click', sendMessage);
             
+            // Connect to the server
             socket = io.connect();
             
+            // When recieving this call from the server
+            // Update your drawstack to the current drawstack
+            // Wait for other users if you need to
+            // Otherwise, this will put you in the game
             socket.on('catchUp', function(data){
                 drawStack = data;
                 gameState = 3;
@@ -142,8 +180,11 @@
                 draw();
             });
             
+            // Update the drawstack when recieving this server message
             socket.on('updateDraw', updateDrawstack);
             
+            // When the server sends a message
+            // Update the chat to match
             socket.on('msg', (data) => {
                 if(!data.name){
                       document.querySelector('#chat').value += "" + data.msg + "\r\n";
@@ -153,6 +194,8 @@
                   }
             });
             
+            // If you guessed correctly on your message
+            // Increase your score, then disable more guesses
             socket.on('correctguess', (data) => {
                 document.querySelector('#chat').value += "You guessed correctly! \r\n";
                 score += 1;
@@ -160,15 +203,21 @@
                 gameState = 5;
             });
             
+            // Once you've joined the room, you will be asked to submit words
             socket.on('joinedroom', function(data){
                 gameState = 4;
                 document.querySelector("#drawturn").innerHTML = "Please Submit Words";
             });
             
+            // Update the timer to match the server's
             socket.on('tickTimer', function(data){
                 document.querySelector("#drawtimer").innerHTML = data;
             });
             
+            // Change the turn
+            // if you are the current drawer, display the word
+            // if you are not, wait for the drawer to start
+            // This clears the drawstack and the canvas
             socket.on('changeTurn', function(data) {
                 if(gameState != 0 && gameState != 4){
                     ctx.clearRect(0,0, canvas.width, canvas.height);
@@ -185,7 +234,10 @@
                 }
             });
             
+            // Every milisecond, check the mouse position
             setInterval(checkMouse, 1);
+            
+            // Every second, if you are the drawer, tick the timer
             setInterval(function(){
                 if(gameState == 2){
                     socket.emit('ticktimer');

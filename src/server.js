@@ -18,25 +18,32 @@ const app = http.createServer(onRequest).listen(port);
 // io Server
 const io = socketio(app);
 
-const users = {};
-const userNames = [];
-let pictures = [];
-let drawstack = [];
-let currentDrawer = null;
-let currentWord = null;
-let currentTime = 0;
+const users = {}; // Object to hold user data
+const userNames = []; // Array to hold usernames
+let pictures = []; // Array to hold words submitted by users to create pictures
+let drawstack = []; // Array to hold the drawstack for players that join
+let currentDrawer = null; // Variable to hold the current drawer's name
+let currentWord = null; // Variable to hold the current word
+let currentTime = 0; // The current time left in the round
 
+// When the socket connects, set up the events
 io.on('connection', (socket) => {
   // Join the Room
   socket.join('room1');
   let sockName;
 
+  // When the user joins set the username and socket name
+  // Add user to the users object
+  // Then tell user they have joined the room
   socket.on('userjoin', (data) => {
     users.name = data.msg;
     sockName = data.msg;
     socket.emit('joinedroom');
   });
 
+  // When the user submits their words, add it to the picture array
+  // Let the user catch up on the current round
+  // If there is exactly 2 users, restart the game
   socket.on('addwords', (data) => {
     pictures = pictures.concat(data.words);
     // broadcast the current drawstack
@@ -55,12 +62,16 @@ io.on('connection', (socket) => {
     }
   });
 
-  // When they update their square's position, redraw it
+  // When the user adds a new point, broadcast it to all users in the room
+  // Update the drawstack
   socket.on('newpoint', (data) => {
     drawstack.push(data);
     io.sockets.in('room1').emit('updateDraw', data);
   });
 
+  // When the server recieves a message
+  // If the message matches the current word, don't display it and award the player a point
+  // Otherwise, send the message to every player
   socket.on('msgToServer', (data) => {
     if (data.msg.toLowerCase() === currentWord.toLowerCase()) {
       io.sockets.in('room1').emit('msg', { msg: `${data.name} guessed the word!`, name: data.name });
@@ -71,6 +82,8 @@ io.on('connection', (socket) => {
   });
 
   // Tick the Timer
+  // Once it reaches zero, start the next round
+  // Chooses a new player
   socket.on('ticktimer', () => {
     currentTime -= 1;
     if (currentTime <= 0) {
@@ -96,6 +109,7 @@ io.on('connection', (socket) => {
   });
 
   // When they disconnect, leave the room
+  // If they were the drawer, start a new round
   socket.on('disconnect', () => {
     socket.leave('room1');
     userNames.splice(userNames.indexOf(sockName), 1);
