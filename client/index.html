@@ -11,10 +11,22 @@
         let socket;
         let randColor;
         let mouseDown;
-        var mouseX;
-        var mouseY;
-        let drawTurn;
+        let mouseX;
+        let mouseY;
+        let username;
+        let score;
+        let myWords = [];
         let drawStack = [];
+
+        /*
+        * 0 = Game Not Started/Picking Username
+        * 1 = Not Your Turn
+        * 2 = Your Turn
+        * 3 = Waiting for players
+        * 4 = Submitting Words
+        * 5 = Correctly Guessed a Word
+        */
+        let gameState;
 
         let circle = {
             updateTime: new Date().getTime(),
@@ -38,7 +50,7 @@
                 const drawCall = drawStack[keys[i]];
                 ctx.fillStyle = drawCall.color;
                 ctx.strokeStyle = drawCall.color;
-                ctx.beginPath()
+                ctx.beginPath();
                 ctx.arc(drawCall.x, drawCall.y, drawCall.rad, 0, 2*Math.PI);
                 ctx.fill();
                 ctx.stroke();
@@ -51,17 +63,46 @@
         };
 
         const checkMouse = () => {
-            if(mouseDown){
+            if(mouseDown && gameState == 2){
                 makeCircle();
             };
         };
 
+        const sendMessage = (e) => {
+            const message = document.querySelector("#message");
+            const chat = document.querySelector("#chat");
+            let chatMessage = message.value;
+            message.value = '';
+            if(!chatMessage){
+              chatMessage = '...';
+            }
+            switch(gameState){
+                case 0:
+                    username = chatMessage;
+                    socket.emit('userjoin', { msg: chatMessage});
+                    break;
+                case 1:
+                    socket.emit('msgToServer', { msg : chatMessage, name: username});
+                    break;
+                case 4:
+                    myWords.push(chatMessage);
+                    if(myWords.length < 5){
+                        document.querySelector('#chat').value += "You have " + (5-myWords.length) + " left to submit \r\n";
+                    }
+                    else{
+                        socket.emit('addwords', {words: myWords, name: username});
+                    }
+                    
+            }
+        }
+        
         const init = () => {
             canvas = document.querySelector("#canvas");
             ctx = canvas.getContext("2d");
             randColor = '#';
             mouseDown = false;
-            drawTurn = false;
+            gameState = 0;
+            score = 0;
             var letters = '0123456789ABCDEF';
             var color = '#';
             for(var i = 0; i < 6; i++){
@@ -83,33 +124,64 @@
                 mouseY = evt.clientY;
             });
             
+            const sendMsg = document.querySelector("#send");
+            sendMsg.addEventListener('click', sendMessage);
+            
             socket = io.connect();
             
             socket.on('catchUp', function(data){
                 drawStack = data;
-            });
-            
-            socket.on('connect', function () {
-                socket.emit('join', circle);
+                gameState = 3;
+                document.querySelector("#drawturn").innerHTML = "Waiting for Users...";
+                draw();
             });
             
             socket.on('updateDraw', updateDrawstack);
+            
+            socket.on('msg', (data) => {
+                if(!data.name){
+                      document.querySelector('#chat').value += "" + data.msg + "\r\n";
+                  }
+                else{
+                      document.querySelector('#chat').value += "" + data.name + ": " + data.msg + "\r\n";
+                  }
+            });
+            
+            socket.on('correctguess', (data) => {
+                document.querySelector('#chat').value += "You guessed correctly! \r\n";
+                score += 1;
+                document.querySelector("#score").innerHTML = "Your Score: " + score;
+                gameState = 5;
+            });
+            
+            socket.on('joinedroom', function(data){
+                gameState = 4;
+                document.querySelector("#drawturn").innerHTML = "Please Submit Words";
+            });
             
             socket.on('tickTimer', function(data){
                 document.querySelector("#drawtimer").innerHTML = data;
             });
             
             socket.on('changeTurn', function(data) {
-                drawTurn = data.status;
-                if(drawTurn == true){
-                    document.querySelector("#drawturn").innerHTML = `Draw ${data.draw}`;
+                if(gameState != 0 && gameState != 4){
+                    ctx.clearRect(0,0, canvas.width, canvas.height);
+                    drawStack = [];
+                    if(data.name == username){
+                        document.querySelector("#drawturn").innerHTML = `Draw ${data.draw}`;
+                        gameState = 2;
+                    }
+                    else{
+                        document.querySelector("#drawturn").innerHTML = 'Guess The Picture';
+                        gameState = 1;
+                    }
+                    document.querySelector("#drawtimer").innerHTML = "Time Left: 30";
                 }
-                document.querySelector("#drawtimer").innerHTML = "Time Left: 30";
             });
             
-            setInterval(checkMouse, 1);
+            setInterval(checkMouse, 0.001);
             setInterval(function(){
-                if(drawTurn){
+                if(gameState == 2){
                     socket.emit('ticktimer');
                 }
             }, 1000);
@@ -121,8 +193,9 @@
 </head>
 <body>
     <canvas id="canvas" height="750" width="1000" style="border: 5px solid black" >Why are you not using HTML5?</canvas>
-    <h1 id="drawturn">Click To Connect and Draw</h1>
+    <h1 id="drawturn">Enter Your Username in the Message Bar Then Hit Send</h1>
     <h2 id="drawtimer"></h2>
+    <h3 id="score">Your Score: 0</h3>
     <div style="position: absolute; left: 1100px; top: 5px">
         <label for="message">Message:</label>
 	    <input id="message" name="message" type="text"/>
